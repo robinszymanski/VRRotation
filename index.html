@@ -108,6 +108,286 @@
 
                 // Initiale Darstellung (nur Kurve) und Tafel
                 this.updateGeometry();
+                
+                // Nur updaten, wenn der Text auch gefunden wurde
+                if(this.infoText) {
+                    this.updateInfoBoard();
+                } else {
+                    console.error("Fehler: '#info-text' konnte nicht gefunden werden.");
+                }
+            },
+
+            tick: function (time, timeDelta) {
+                if(this.isRotating) {
+                    this.angle += (timeDelta / 1000) * 0.4; 
+                    
+                    if(this.angle >= Math.PI * 2) {
+                        this.angle = Math.PI * 2;
+                        this.isRotating = false;
+                        // Nächsten Button einblenden
+                        if(this.nextButton) this.nextButton.setAttribute('visible', 'true');
+                    }
+                    
+                    this.updateGeometry();
+                    if(this.infoText) this.updateInfoBoard();
+                }
+            },
+
+            updateGeometry: function() {
+                const data = this.funcs[this.data.functionIndex];
+                const points = [];
+                const steps = 100;
+                
+                for (let i = 0; i <= steps; i++) {
+                    const mathX = data.a + (data.b - data.a) * (i / steps);
+                    const mathY = data.fn(mathX);
+                    points.push(new THREE.Vector2(mathY, mathX));
+                }
+
+                if (this.mesh.geometry) {
+                    this.mesh.geometry.dispose();
+                }
+
+                // Winkel von 0.001 zeigt nur den Graphen an (2D-Kurve)
+                const currentAngle = Math.max(0.001, this.angle);
+                this.mesh.geometry = new THREE.LatheGeometry(points, 64, 0, currentAngle);
+                this.material.color.set(data.color);
+            },
+
+            updateInfoBoard: function() {
+                const data = this.funcs[this.data.functionIndex];
+                const angleDeg = Math.round(this.angle * (180 / Math.PI));
+                
+                // Aktuelles Volumen berechnen
+                let currentVolume = (data.exactV * (this.angle / (Math.PI * 2))).toFixed(2);
+
+                const textContent = `
+Koerper: ${data.name}
+Funktion: ${data.eq}
+Integral: ${data.integral}
+Intervall: [${data.a}, ${data.b}]
+
+Winkel: ${angleDeg} Grad
+Volumen (aktuell): ${currentVolume} VE
+Volumen (gesamt): ${(data.exactV).toFixed(2)} VE
+                `;
+                
+                this.infoText.setAttribute('value', textContent);
+            },
+
+            nextFunction: function() {
+                this.data.functionIndex = (this.data.functionIndex + 1) % this.funcs.length;
+                this.angle = 0;
+                this.isRotating = false;
+                
+                // Buttons umschalten
+                if(this.nextButton) this.nextButton.setAttribute('visible', 'false');
+                if(this.startButton) this.startButton.setAttribute('visible', 'true');
+                
+                this.updateGeometry();
+                if(this.infoText) this.updateInfoBoard();
+            },
+
+            createAxes: function() {
+                const axesContainer = document.querySelector('#axes-container');
+                if(!axesContainer) return;
+
+                // X-Achse (Rot) -> in der VR-Welt geht x nach hinten (-z)
+                const xAxis = document.createElement('a-entity');
+                xAxis.setAttribute('line', 'start: 0 0 0; end: 0 0 -11; color: #ff5555');
+                axesContainer.appendChild(xAxis);
+                
+                // Markierungen für die x-Achse
+                for(let i=1; i<=10; i++) {
+                    const tick = document.createElement('a-entity');
+                    tick.setAttribute('line', `start: -0.1 0 ${-i}; end: 0.1 0 ${-i}; color: #ff5555`);
+                    
+                    const label = document.createElement('a-text');
+                    label.setAttribute('value', i.toString());
+                    label.setAttribute('position', `0.2 0.1 ${-i}`);
+                    label.setAttribute('scale', '0.5 0.5 0.5');
+                    label.setAttribute('color', '#ff5555');
+                    label.setAttribute('font', 'kelsonsans');
+                    
+                    axesContainer.appendChild(tick);
+                    axesContainer.appendChild(label);
+                }
+
+                // Y-Achse (Grün) -> in der VR-Welt geht y nach oben (+y)
+                const yAxis = document.createElement('a-entity');
+                yAxis.setAttribute('line', 'start: 0 0 0; end: 0 5 0; color: #55ff55');
+                axesContainer.appendChild(yAxis);
+                
+                const yLabel = document.createElement('a-text');
+                yLabel.setAttribute('value', 'f(x)');
+                yLabel.setAttribute('position', '0.2 4.8 0');
+                yLabel.setAttribute('scale', '0.6 0.6 0.6');
+                yLabel.setAttribute('color', '#55ff55');
+                yLabel.setAttribute('font', 'kelsonsans');
+                axesContainer.appendChild(yLabel);
+
+                // Z-Achse (Blau) -> in der VR-Welt geht z zur Seite (+x)
+                const zAxis = document.createElement('a-entity');
+                zAxis.setAttribute('line', 'start: 0 0 0; end: 5 0 0; color: #5555ff');
+                axesContainer.appendChild(zAxis);
+            }
+        });
+    </script>
+
+    <a-scene background="color: #111">
+        
+        <a-entity position="0 1.6 0">
+            <a-camera>
+                <!-- WICHTIG: fuse="true" erzwingt das automatische Klicken (nach fuse-timeout), auch am PC -->
+                <a-cursor color="#FFF" 
+                          fuse="true" fuse-timeout="1500" raycaster="objects: .clickable"
+                          animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1"
+                          animation__fusing="property: scale; startEvents: fusing; easing: easeInCubic; dur: 1500; from: 1 1 1; to: 0.1 0.1 0.1">
+                </a-cursor>
+            </a-camera>
+        </a-entity>
+
+        <!-- Dynamisch generierte Achsen (Start bei Augenhöhe der Kamera) -->
+        <a-entity id="axes-container" position="0 1.6 0"></a-entity>
+
+        <!-- Verbreiterte Infotafel (Muss VOR dem rotationskoerper im Code stehen!) -->
+        <a-entity position="-3 2 -4" rotation="0 25 0">
+            <a-plane color="#222" width="4" height="2.5" opacity="0.9"></a-plane>
+            
+            <a-text id="info-text" value="Lade..." position="-1.8 0.4 0.1" color="#FFF" width="3.5" wrap-count="40" font="kelsonsans"></a-text>
+            
+            <!-- Start-Button -->
+            <a-entity id="start-button" position="-0.8 -0.8 0.1" class="clickable"
+                      geometry="primitive: plane; width: 1.4; height: 0.4" material="color: #2196F3">
+                <a-text value="Start Rotation" align="center" position="0 0 0.05" color="#FFF" width="3.5" font="kelsonsans"></a-text>
+            </a-entity>
+
+            <!-- Nächster-Button -->
+            <a-entity id="next-button" position="0.8 -0.8 0.1" visible="false" class="clickable"
+                      geometry="primitive: plane; width: 1.4; height: 0.4" material="color: #4CAF50">
+                <a-text value="Naechster Koerper" align="center" position="0 0 0.05" color="#FFF" width="3.5" font="kelsonsans"></a-text>
+            </a-entity>
+        </a-entity>
+
+        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
+        <a-light type="directional" color="#fff" intensity="0.5" position="-1 2 1"></a-light>
+
+        <!-- Der Rotationskörper generiert sich selbst, sucht aber nach der Infotafel.
+             Er muss ganz unten in der Hierarchie stehen, damit die Tafel schon geladen ist. -->
+        <a-entity rotationskoerper="functionIndex: 0" position="0 1.6 0"></a-entity>
+
+    </a-scene>
+</body>
+</html><!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rotationskörper VR</title>
+    
+    <!-- WebXR Polyfill für iOS/iPhone Unterstützung -->
+    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.js"></script>
+    <script>
+        // Initialisiere den Polyfill, bevor A-Frame geladen wird
+        if (typeof WebXRPolyfill !== 'undefined') {
+            new WebXRPolyfill();
+        }
+    </script>
+
+    <!-- A-Frame Bibliothek einbinden -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        #vr-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-family: sans-serif;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="vr-info">Tippe auf das Brillen-Symbol (unten rechts) für den Cardboard VR-Modus.</div>
+
+    <script>
+        AFRAME.registerComponent('rotationskoerper', {
+            schema: {
+                functionIndex: {type: 'number', default: 0}
+            },
+            init: function () {
+                // Hier definieren wir die anschaulichen Beispielfunktionen
+                this.funcs = [
+                    { name: "Zylinder", eq: "f(x) = 2", integral: "V = π ∫ (2)² dx", fn: (x) => 2, a: 0, b: 10, color: "#ff4444" },
+                    { name: "Kegelstumpf", eq: "f(x) = 0.5x + 1", integral: "V = π ∫ (0.5x + 1)² dx", fn: (x) => 0.5 * x + 1, a: 0, b: 10, color: "#44ff44" },
+                    { name: "Paraboloid", eq: "f(x) = 2*√(x)", integral: "V = π ∫ (2√(x))² dx", fn: (x) => 2 * Math.sqrt(x), a: 0, b: 10, color: "#4444ff" },
+                    { name: "Vase", eq: "f(x) = 1.5 + sin(x)", integral: "V = π ∫ (1.5 + sin(x))² dx", fn: (x) => 1.5 + Math.sin(x), a: 0, b: 10, color: "#ff44ff" }
+                ];
+                
+                // Exaktes Gesamtvolumen (analytische Approximation) für die Tafel vorbereiten
+                this.funcs.forEach(data => {
+                    let exactV = 0;
+                    const steps = 1000;
+                    const dx = (data.b - data.a) / steps;
+                    for(let i=0; i<steps; i++) {
+                        const x = data.a + i * dx;
+                        exactV += Math.PI * Math.pow(data.fn(x), 2) * dx;
+                    }
+                    data.exactV = exactV;
+                });
+
+                this.angle = 0;
+                this.isRotating = false; // Startet jetzt nicht sofort
+                
+                // Material für den Rotationskörper
+                this.material = new THREE.MeshBasicMaterial({
+                    color: this.funcs[this.data.functionIndex].color,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.6,
+                    wireframe: false
+                });
+                
+                this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material);
+                this.el.setObject3D('mesh', this.mesh);
+
+                // Objekt kippen für die VR-Ausrichtung
+                this.el.object3D.rotation.x = Math.PI / 2;
+
+                // Referenzen zur Infotafel & Buttons
+                this.infoText = document.querySelector('#info-text');
+                this.startButton = document.querySelector('#start-button');
+                this.nextButton = document.querySelector('#next-button');
+                
+                // Event-Listener für den "Start"-Button
+                if(this.startButton) {
+                    this.startButton.addEventListener('click', () => {
+                        if(!this.isRotating && this.angle === 0) {
+                            this.isRotating = true;
+                            this.startButton.setAttribute('visible', 'false');
+                        }
+                    });
+                }
+
+                // Event-Listener für den "Weiter"-Button
+                if(this.nextButton) {
+                    this.nextButton.addEventListener('click', () => {
+                        if(!this.isRotating && this.angle >= Math.PI * 2) {
+                            this.nextFunction();
+                        }
+                    });
+                }
+
+                // Baue die Koordinatenachsen auf
+                this.createAxes();
+
+                // Initiale Darstellung (nur Kurve) und Tafel
+                this.updateGeometry();
                 this.updateInfoBoard();
             },
 
