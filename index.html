@@ -75,19 +75,23 @@
                 this.nextButton = document.querySelector('#next-button');
                 
                 // Event-Listener für den "Start"-Button
-                this.startButton.addEventListener('click', () => {
-                    if(!this.isRotating && this.angle === 0) {
-                        this.isRotating = true;
-                        this.startButton.setAttribute('visible', 'false');
-                    }
-                });
+                if(this.startButton) {
+                    this.startButton.addEventListener('click', () => {
+                        if(!this.isRotating && this.angle === 0) {
+                            this.isRotating = true;
+                            this.startButton.setAttribute('visible', 'false');
+                        }
+                    });
+                }
 
                 // Event-Listener für den "Weiter"-Button
-                this.nextButton.addEventListener('click', () => {
-                    if(!this.isRotating && this.angle >= Math.PI * 2) {
-                        this.nextFunction();
-                    }
-                });
+                if(this.nextButton) {
+                    this.nextButton.addEventListener('click', () => {
+                        if(!this.isRotating && this.angle >= Math.PI * 2) {
+                            this.nextFunction();
+                        }
+                    });
+                }
 
                 // Baue die Koordinatenachsen auf
                 this.createAxes();
@@ -215,7 +219,9 @@ Volumen (gesamt): ${(data.exactV).toFixed(2)} VE
         
         <a-entity position="0 1.6 0">
             <a-camera>
+                <!-- WICHTIG: fuse="true" erzwingt das automatische Klicken (nach fuse-timeout), auch am PC -->
                 <a-cursor color="#FFF" 
+                          fuse="true" fuse-timeout="1500" raycaster="objects: .clickable"
                           animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1"
                           animation__fusing="property: scale; startEvents: fusing; easing: easeInCubic; dur: 1500; from: 1 1 1; to: 0.1 0.1 0.1">
                 </a-cursor>
@@ -233,15 +239,15 @@ Volumen (gesamt): ${(data.exactV).toFixed(2)} VE
             
             <a-text id="info-text" value="Lade..." position="-1.8 0.4 0.01" color="#FFF" width="3.5" wrap-count="40"></a-text>
             
-            <!-- Start-Button -->
-            <a-entity id="start-button" position="-0.8 -0.8 0.02" class="clickable">
-                <a-plane color="#2196F3" width="1.4" height="0.4"></a-plane>
+            <!-- Start-Button: Geometrie direkt im klickbaren Element -->
+            <a-entity id="start-button" position="-0.8 -0.8 0.02" class="clickable"
+                      geometry="primitive: plane; width: 1.4; height: 0.4" material="color: #2196F3">
                 <a-text value="Start Rotation" align="center" position="0 0 0.01" color="#FFF" width="3.5"></a-text>
             </a-entity>
 
             <!-- Nächster-Button (Initial unsichtbar) -->
-            <a-entity id="next-button" position="0.8 -0.8 0.02" visible="false" class="clickable">
-                <a-plane color="#4CAF50" width="1.4" height="0.4"></a-plane>
+            <a-entity id="next-button" position="0.8 -0.8 0.02" visible="false" class="clickable"
+                      geometry="primitive: plane; width: 1.4; height: 0.4" material="color: #4CAF50">
                 <a-text value="Naechster Koerper" align="center" position="0 0 0.01" color="#FFF" width="3.5"></a-text>
             </a-entity>
         </a-entity>
